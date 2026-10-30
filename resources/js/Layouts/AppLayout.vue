@@ -25,6 +25,7 @@ import UserSettingsIcon from '@/Components/UserSettingsIcon.vue';
 import MainContainer from '@/packages/ui/src/MainContainer.vue';
 import { computed, nextTick, onMounted, provide, ref } from 'vue';
 import NotificationContainer from '@/Components/NotificationContainer.vue';
+import FloatingTimerWidget from '@/Components/FloatingTimerWidget.vue';
 import { initializeStores } from '@/utils/init';
 import { useCurrentTimeEntryStore } from '@/utils/useCurrentTimeEntry';
 import {
@@ -400,6 +401,7 @@ const page = usePage<{
         </div>
     </div>
     <NotificationContainer></NotificationContainer>
+    <FloatingTimerWidget></FloatingTimerWidget>
     <UserTimezoneMismatchModal></UserTimezoneMismatchModal>
     <CommandPaletteProvider></CommandPaletteProvider>
     <UpgradeModal v-model:show="showBillableRatesUpgradeModal" feature="billable-rates" />

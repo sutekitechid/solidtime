@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { PlusIcon, XMarkIcon, ClockIcon } from '@heroicons/vue/20/solid';
+import { PlusIcon, XMarkIcon, ClockIcon, ArrowsPointingOutIcon, EyeIcon } from '@heroicons/vue/20/solid';
 import { Coffee } from '@lucide/vue';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '..';
 import type { TimeTrackerMode } from '@/packages/ui/src/TimeTracker/types';
@@ -10,11 +10,13 @@ const props = withDefaults(
         timeTrackerMode?: TimeTrackerMode;
         breaksEnabled?: boolean;
         isOnBreak?: boolean;
+        pipSupported?: boolean;
     }>(),
     {
         timeTrackerMode: 'project',
         breaksEnabled: false,
         isOnBreak: false,
+        pipSupported: false,
     }
 );
 
@@ -23,6 +25,8 @@ const emit = defineEmits<{
     startBreak: [];
     discard: [];
     toggleTimeTrackerMode: [];
+    popout: [];
+    showWidget: [];
 }>();
 </script>
 
@@ -69,6 +73,20 @@ const emit = defineEmits<{
                         ? 'Switch to project mode'
                         : 'Switch to simple mode'
                 }}</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+                v-if="props.hasActiveTimer"
+                class="flex items-center space-x-3 cursor-pointer"
+                @click="emit('showWidget')">
+                <EyeIcon class="w-5" />
+                <span>Show floating widget</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+                v-if="props.hasActiveTimer && props.pipSupported"
+                class="flex items-center space-x-3 cursor-pointer"
+                @click="emit('popout')">
+                <ArrowsPointingOutIcon class="w-5" />
+                <span>Pop out timer</span>
             </DropdownMenuItem>
             <DropdownMenuItem
                 v-if="props.hasActiveTimer"
