@@ -39,6 +39,9 @@ import { ref } from 'vue';
 import { useNotificationsStore } from '@/utils/notification';
 import { useTimeEntriesMutations } from '@/utils/useTimeEntriesMutations';
 import { useTimeEntriesInfiniteQuery } from '@/utils/useTimeEntriesInfiniteQuery';
+import { useDocumentPip } from '@/utils/useDocumentPip';
+
+const { pipSupported, togglePip } = useDocumentPip();
 
 const page = usePage<{
     auth: {
@@ -227,9 +230,11 @@ const { tags } = useTagsQuery();
                     :time-tracker-mode="timeTrackerMode"
                     :is-on-break="isOnBreak"
                     :breaks-enabled="breaksEnabled"
+                    :pip-supported="pipSupported"
                     @manual-entry="showManualTimeEntryModal = true"
                     @start-break="startBreak"
                     @toggle-time-tracker-mode="toggleTimeTrackerMode"
+                    @popout="togglePip"
                     @discard="discardCurrentTimeEntry"></TimeTrackerMoreOptionsDropdown>
             </div>
         </div>
