@@ -40,10 +40,8 @@ import { useNotificationsStore } from '@/utils/notification';
 import { useTimeEntriesMutations } from '@/utils/useTimeEntriesMutations';
 import { useTimeEntriesInfiniteQuery } from '@/utils/useTimeEntriesInfiniteQuery';
 import { useDocumentPip } from '@/utils/useDocumentPip';
-import { useFloatingWidgetUi } from '@/utils/useFloatingWidgetUi';
 
 const { pipSupported, togglePip } = useDocumentPip();
-const { showWidget } = useFloatingWidgetUi();
 
 const page = usePage<{
     auth: {
@@ -237,7 +235,6 @@ const { tags } = useTagsQuery();
                     @start-break="startBreak"
                     @toggle-time-tracker-mode="toggleTimeTrackerMode"
                     @popout="togglePip"
-                    @show-widget="showWidget"
                     @discard="discardCurrentTimeEntry"></TimeTrackerMoreOptionsDropdown>
             </div>
         </div>
