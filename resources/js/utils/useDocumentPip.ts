@@ -2,8 +2,15 @@ import { computed } from 'vue';
 import dayjs from 'dayjs';
 import { storeToRefs } from 'pinia';
 import { formatDuration } from '@/packages/ui/src/utils/time';
-import { useCurrentTimeEntryStore } from '@/utils/useCurrentTimeEntry';
+import {
+    getLastWorkTimeEntry,
+    useCurrentTimeEntryStore,
+} from '@/utils/useCurrentTimeEntry';
 import { useProjectsQuery } from '@/utils/useProjectsQuery';
+import { useTimeEntriesInfiniteQuery } from '@/utils/useTimeEntriesInfiniteQuery';
+import { getCurrentOrganizationId } from '@/utils/useUser';
+import { useOrganizationQuery } from '@/utils/useOrganizationQuery';
+import { useBreaksEnabled } from '@/packages/ui/src/utils/useBreaksEnabled';
 import { useNotificationsStore } from '@/utils/notification';
 
 /**
@@ -22,7 +29,14 @@ interface DocumentPictureInPictureApi {
 let pipWindow: Window | null = null;
 let pipElapsedElement: HTMLElement | null = null;
 let pipSubElement: HTMLElement | null = null;
+let pipBreakButton: HTMLButtonElement | null = null;
+let pipCompactMode = false;
 let pipInterval: ReturnType<typeof setInterval> | null = null;
+
+const COFFEE_SVG =
+    '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><line x1="6" x2="6" y1="2" y2="4"/><line x1="10" x2="10" y1="2" y2="4"/><line x1="14" x2="14" y1="2" y2="4"/></svg>';
+const PLAY_SVG =
+    '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5-13-7.5Z"/></svg>';
 
 function getPipApi(): DocumentPictureInPictureApi | null {
     if (typeof window === 'undefined' || !('documentPictureInPicture' in window)) {
@@ -59,9 +73,35 @@ function copyStylesInto(source: Document, target: Document) {
 export function useDocumentPip() {
     const store = useCurrentTimeEntryStore();
     const { currentTimeEntry, now, isOnBreak } = storeToRefs(store);
-    const { setActiveState } = store;
+    const { setActiveState, startBreak, resumeWorkAfterBreak } = store;
     const { projects } = useProjectsQuery();
     const { addNotification } = useNotificationsStore();
+
+    const { organization } = useOrganizationQuery(getCurrentOrganizationId()!);
+    const breaksEnabled = useBreaksEnabled(organization);
+
+    const { data: timeEntriesData } = useTimeEntriesInfiniteQuery();
+    const timeEntries = computed(
+        () => timeEntriesData.value?.pages.flatMap((page) => page.data) || []
+    );
+    const lastWorkTimeEntry = computed(() => getLastWorkTimeEntry(timeEntries.value));
+
+    async function toggleBreak() {
+        if (isOnBreak.value) {
+            const timeEntry = lastWorkTimeEntry.value;
+            if (!timeEntry) {
+                addNotification(
+                    'error',
+                    'Nothing to resume',
+                    'No finished work entry found to resume.'
+                );
+                return;
+            }
+            await resumeWorkAfterBreak(timeEntry);
+            return;
+        }
+        await startBreak();
+    }
 
     const pipSupported = computed(() => getPipApi() !== null);
 
@@ -103,6 +143,12 @@ export function useDocumentPip() {
         if (pipSubElement) {
             pipSubElement.textContent = currentTitleText();
         }
+        if (pipBreakButton) {
+            pipBreakButton.innerHTML = isOnBreak.value ? PLAY_SVG : COFFEE_SVG;
+            pipBreakButton.title = isOnBreak.value ? 'Resume work' : 'Take a break';
+            pipBreakButton.style.display =
+                pipCompactMode || !breaksEnabled.value ? 'none' : '';
+        }
     }
 
     function teardownPip() {
@@ -112,6 +158,8 @@ export function useDocumentPip() {
         }
         pipElapsedElement = null;
         pipSubElement = null;
+        pipBreakButton = null;
+        pipCompactMode = false;
         pipWindow = null;
     }
 
@@ -166,14 +214,19 @@ export function useDocumentPip() {
             'position:absolute;top:4px;right:6px;width:16px;height:16px;border-radius:9999px;border:1px solid rgba(255,255,255,0.25);background:transparent;color:inherit;font-size:11px;line-height:1;cursor:pointer;opacity:0.7;padding:0;';
         compactButton.addEventListener('click', () => {
             pipCompact = !pipCompact;
+            pipCompactMode = pipCompact;
             compactButton.textContent = pipCompact ? '+' : '–';
             compactButton.title = pipCompact ? 'Show full timer' : 'Minimize to numbers only';
             if (pipSubElement) {
                 (pipSubElement as HTMLElement).style.display = pipCompact ? 'none' : '';
             }
+            if (pipBreakButton) {
+                pipBreakButton.style.display = pipCompact ? 'none' : '';
+            }
             if (stopButton) {
                 stopButton.style.display = pipCompact ? 'none' : '';
             }
+            refreshPipContent();
         });
         container.appendChild(compactButton);
 
@@ -202,6 +255,16 @@ export function useDocumentPip() {
             void setActiveState(false);
         });
         container.appendChild(stopButton);
+
+        pipBreakButton = doc.createElement('button');
+        pipBreakButton.title = 'Take a break';
+        pipBreakButton.style.cssText =
+            'flex-shrink:0;width:30px;height:30px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,0.25);border-radius:9999px;background:transparent;color:inherit;cursor:pointer;padding:0;';
+        pipBreakButton.innerHTML = COFFEE_SVG;
+        pipBreakButton.addEventListener('click', () => {
+            void toggleBreak();
+        });
+        container.insertBefore(pipBreakButton, stopButton);
 
         doc.body.appendChild(container);
         refreshPipContent();
