@@ -12,6 +12,10 @@ dist
 /storage/*.key
 /vendor
 .env
+laravel.env
+# Local/backup env files (contain real secrets, never push)
+.env.*.bak
+.env.localhost*
 .env.backup
 .phpunit.result.cache
 Homestead.json
