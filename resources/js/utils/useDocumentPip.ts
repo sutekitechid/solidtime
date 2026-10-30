@@ -34,9 +34,9 @@ let pipCompactMode = false;
 let pipInterval: ReturnType<typeof setInterval> | null = null;
 
 const COFFEE_SVG =
-    '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><line x1="6" x2="6" y1="2" y2="4"/><line x1="10" x2="10" y1="2" y2="4"/><line x1="14" x2="14" y1="2" y2="4"/></svg>';
+    '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block"><path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><line x1="6" x2="6" y1="2" y2="4"/><line x1="10" x2="10" y1="2" y2="4"/><line x1="14" x2="14" y1="2" y2="4"/></svg>';
 const PLAY_SVG =
-    '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5-13-7.5Z"/></svg>';
+    '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="display:block"><path d="M7 4.5v15l13-7.5-13-7.5Z"/></svg>';
 
 function getPipApi(): DocumentPictureInPictureApi | null {
     if (typeof window === 'undefined' || !('documentPictureInPicture' in window)) {
@@ -247,7 +247,7 @@ export function useDocumentPip() {
         const stopButton = doc.createElement('button');
         stopButton.title = 'Stop timer';
         stopButton.style.cssText =
-            'flex-shrink:0;width:30px;height:30px;display:flex;align-items:center;justify-content:center;border:none;border-radius:8px;background:#ef4444;cursor:pointer;padding:0;';
+            'flex-shrink:0;width:30px;height:30px;display:flex;align-items:center;justify-content:center;border:none;border-radius:9999px;background:#ef4444;cursor:pointer;padding:0;line-height:0;';
         const stopSquare = doc.createElement('div');
         stopSquare.style.cssText = 'width:13px;height:13px;border-radius:3px;background:#fff;';
         stopButton.appendChild(stopSquare);
@@ -259,10 +259,18 @@ export function useDocumentPip() {
         pipBreakButton = doc.createElement('button');
         pipBreakButton.title = 'Take a break';
         pipBreakButton.style.cssText =
-            'flex-shrink:0;width:30px;height:30px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,0.25);border-radius:9999px;background:transparent;color:inherit;cursor:pointer;padding:0;';
+            'flex-shrink:0;width:30px;height:30px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,0.25);border-radius:9999px;background:transparent;color:inherit;cursor:pointer;padding:0;line-height:0;';
         pipBreakButton.innerHTML = COFFEE_SVG;
         pipBreakButton.addEventListener('click', () => {
             void toggleBreak();
+        });
+        pipBreakButton.addEventListener('mouseenter', () => {
+            pipBreakButton!.style.color = '#facc15';
+            pipBreakButton!.style.borderColor = '#facc15';
+        });
+        pipBreakButton.addEventListener('mouseleave', () => {
+            pipBreakButton!.style.color = '';
+            pipBreakButton!.style.borderColor = '';
         });
         container.insertBefore(pipBreakButton, stopButton);
 
