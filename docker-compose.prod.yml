@@ -1,0 +1,146 @@
+# Production compose untuk solidtime.
+# Database dibuat otomatis oleh image postgres dari POSTGRES_* di bawah
+# (tidak perlu CREATE DATABASE manual). Aplikasi konek via hostname service
+# `pgsql`, BUKAN 127.0.0.1. Migrasi jalan otomatis saat boot via
+# AUTO_DB_MIGRATE=true (start-container -> migrate --isolated --force).
+#
+# Cara pakai:
+#   1. cp .env.prod.example .env.prod  (isi DB_PASSWORD, APP_KEY, dsb.)
+#   2. composer install --no-dev --optimize-autoloader && npm ci && npm run build
+#      (wajib SEBELUM build image: Dockerfile hanya dump-autoload,
+#      vendor/ + public/build ikut dari build context)
+#   3. docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+#   4. Satu kali saja: docker compose -f docker-compose.prod.yml exec app \
+#        php artisan passport:client --personal --name=API
+#      lalu masukkan id/secret ke .env.prod dan recreate app.
+
+name: solidtime-prod
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/prod/Dockerfile
+      args:
+        USER_ID: ${USER_ID:-1000}
+        GROUP_ID: ${GROUP_ID:-1000}
+        TZ: ${TZ:-UTC}
+    image: solidtime:${SOLIDTIME_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    ports:
+      - "${FORWARD_APP_PORT:-8000}:8000"
+    env_file:
+      - .env.prod
+    environment:
+      CONTAINER_MODE: http
+      OCTANE_SERVER: frankenphp
+      AUTO_DB_MIGRATE: ${AUTO_DB_MIGRATE:-true}
+      # Host DB = nama service compose, jangan 127.0.0.1
+      DB_CONNECTION: pgsql
+      DB_HOST: pgsql
+      DB_PORT: 5432
+      DB_DATABASE: ${DB_DATABASE:-solidtime}
+      DB_USERNAME: ${DB_USERNAME:-solidtime}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD wajib diisi}
+      GOTENBERG_URL: http://gotenberg:3000
+    depends_on:
+      pgsql:
+        condition: service_healthy
+      gotenberg:
+        condition: service_started
+    volumes:
+      - app-storage:/var/www/html/storage
+    networks:
+      - solidtime
+    healthcheck:
+      test: ["CMD-SHELL", "healthcheck"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 60s
+
+  scheduler:
+    image: solidtime:${SOLIDTIME_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    environment:
+      CONTAINER_MODE: scheduler
+      OCTANE_SERVER: frankenphp
+      AUTO_DB_MIGRATE: ${AUTO_DB_MIGRATE:-true}
+      DB_CONNECTION: pgsql
+      DB_HOST: pgsql
+      DB_PORT: 5432
+      DB_DATABASE: ${DB_DATABASE:-solidtime}
+      DB_USERNAME: ${DB_USERNAME:-solidtime}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD wajib diisi}
+    depends_on:
+      pgsql:
+        condition: service_healthy
+    volumes:
+      - app-storage:/var/www/html/storage
+    networks:
+      - solidtime
+
+  worker:
+    image: solidtime:${SOLIDTIME_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    environment:
+      CONTAINER_MODE: worker
+      OCTANE_SERVER: frankenphp
+      AUTO_DB_MIGRATE: ${AUTO_DB_MIGRATE:-true}
+      WORKER_COMMAND: ${WORKER_COMMAND:-php /var/www/html/artisan queue:work database --sleep=3 --tries=3}
+      DB_CONNECTION: pgsql
+      DB_HOST: pgsql
+      DB_PORT: 5432
+      DB_DATABASE: ${DB_DATABASE:-solidtime}
+      DB_USERNAME: ${DB_USERNAME:-solidtime}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD wajib diisi}
+    depends_on:
+      pgsql:
+        condition: service_healthy
+    volumes:
+      - app-storage:/var/www/html/storage
+    networks:
+      - solidtime
+
+  pgsql:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-solidtime}
+      POSTGRES_USER: ${DB_USERNAME:-solidtime}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD wajib diisi}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - solidtime
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-solidtime} -d ${DB_DATABASE:-solidtime}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    # Jangan expose 5432 ke host kecuali butuh debug. Kalau perlu, uncomment:
+    # ports:
+    #   - "${FORWARD_DB_PORT:-5432}:5432"
+
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    restart: unless-stopped
+    networks:
+      - solidtime
+    healthcheck:
+      test: ["CMD", "curl", "--silent", "--fail", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+  app-storage:
+
+networks:
+  solidtime:
+    driver: bridge

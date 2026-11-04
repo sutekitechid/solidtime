@@ -17,6 +17,8 @@ laravel.env
 .env.*.bak
 .env.localhost*
 .env.backup
+.env.docker.local
+.env.prod
 .phpunit.result.cache
 Homestead.json
 Homestead.yaml

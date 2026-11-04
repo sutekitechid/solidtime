@@ -1,0 +1,102 @@
+# Dev lokal via Docker (tanpa Traefik, tanpa Sail alias).
+# Backend (artisan serve :80) + Postgres + Mailpit + Gotenberg jalan di container,
+# kode tetap live-reload dari direktori ini (bind mount). Vite jalan di dalam
+# service `app` (image sudah berisi Node 20).
+#
+# Cara pakai:
+#   1. cp .env.docker.local.example .env.docker.local
+#      (atau biarkan: file ini sudah disediakan; yang penting DB_PASSWORD kuat
+#      bila dipakai ulang, dan JANGAN commit — sudah di .gitignore)
+#   2. Hentikan artisan/vite yang jalan di host (port 8000 & 5173 harus bebas).
+#   3. docker compose -f docker-compose.local.yml up -d --build
+#   4. docker compose -f docker-compose.local.yml exec app composer install
+#      docker compose -f docker-compose.local.yml exec app npm install
+#      docker compose -f docker-compose.local.yml exec app php artisan migrate --seed
+#      docker compose -f docker-compose.local.yml exec app php artisan storage:link
+#   5. docker compose -f docker-compose.local.yml exec -d app npm run dev
+#   6. Buka http://localhost:8000/login (user seed: test@example.com / password)
+#      Mailpit UI: http://localhost:8025
+#
+# Catatan: vendor/ dan node_modules memakai volume anonim (tidak menimpa
+# direktori host), jadi `composer install`/`npm install` di host TIDAK
+# diperlukan dan TIDAK boleh dicampur.
+
+name: solidtime-local
+
+services:
+  app:
+    build:
+      context: ./docker/local/8.3
+      dockerfile: Dockerfile
+      args:
+        WWWGROUP: ${WWWGROUP:-1000}
+    image: solidtime-local/app
+    ports:
+      - "${FORWARD_APP_PORT:-8000}:80"
+      - "${FORWARD_VITE_PORT:-5173}:5173"
+    env_file:
+      - .env.docker.local
+    environment:
+      WWWUSER: ${WWWUSER:-}
+      LARAVEL_SAIL: 1
+      XDEBUG_MODE: ${SAIL_XDEBUG_MODE:-off}
+      IGNITION_LOCAL_SITES_PATH: ${PWD}
+    volumes:
+      - .:/var/www/html
+      - /var/www/html/vendor
+      - /var/www/html/node_modules
+    depends_on:
+      pgsql:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+      gotenberg:
+        condition: service_started
+    networks:
+      - sail
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  pgsql:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-solidtime}
+      POSTGRES_USER: ${DB_USERNAME:-solidtime}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD wajib diisi di .env.docker.local}
+    volumes:
+      - pgdata-local:/var/lib/postgresql/data
+      - ./docker/local/pgsql/create-testing-database.sql:/docker-entrypoint-initdb.d/10-create-testing-database.sql
+    networks:
+      - sail
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-solidtime} -d ${DB_DATABASE:-solidtime}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    # Publish hanya untuk debug dari host (psql, TablePlus). Default tertutup.
+    # ports:
+    #   - "${FORWARD_DB_PORT:-54329}:5432"
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "${FORWARD_MAILPIT_PORT:-8025}:8025"
+    networks:
+      - sail
+
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    networks:
+      - sail
+    healthcheck:
+      test: ["CMD", "curl", "--silent", "--fail", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata-local:
+
+networks:
+  sail:
+    driver: bridge

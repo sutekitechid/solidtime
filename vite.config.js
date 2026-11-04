@@ -36,11 +36,21 @@ async function getConfig() {
             ...additionalPlugins,
         ],
         server: {
-            host: true,
-            hmr: {
-                host: process.env.VITE_HOST_NAME,
-                clientPort: 80,
-            },
+            // Traefik/Sail mode (VITE_HOST_NAME set): HMR via reverse proxy on port 80.
+            // Docker-local mode (VITE_DEV_HOST set, e.g. 0.0.0.0 in container):
+            // bind all interfaces, browser reaches HMR via VITE_DEV_HMR_HOST.
+            // Fully local mode (neither set): plain localhost HMR on the Vite port.
+            host: process.env.VITE_DEV_HOST || (process.env.VITE_HOST_NAME ? true : '127.0.0.1'),
+            hmr: process.env.VITE_HOST_NAME
+                ? {
+                        host: process.env.VITE_HOST_NAME,
+                        clientPort: 80,
+                    }
+                : process.env.VITE_DEV_HMR_HOST
+                    ? {
+                            host: process.env.VITE_DEV_HMR_HOST,
+                        }
+                    : true,
         },
     });
 }
