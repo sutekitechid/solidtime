@@ -10,7 +10,7 @@ import { useMembersQuery } from '@/utils/useMembersQuery';
 import { useActiveTeamTimeEntriesQuery } from '@/utils/useActiveTeamTimeEntriesQuery';
 import { useTimeEntriesMutations } from '@/utils/useTimeEntriesMutations';
 import { canStopTimeEntryFor, canViewAllTimeEntries } from '@/utils/permissions';
-import { getCurrentMembershipId } from '@/utils/useUser';
+import { getCurrentUserId } from '@/utils/useUser';
 import { getDayJsInstance, getLocalizedDayJs } from '@/packages/ui/src/utils/time';
 import { SecondaryButton } from '@/packages/ui/src';
 
@@ -20,27 +20,33 @@ const { updateTimeEntry } = useTimeEntriesMutations();
 
 const stoppingIds = ref<Set<string>>(new Set());
 
-const memberById = computed(() => {
+// TimeEntryResource has no member_id, only user_id — resolve members by user_id
+// (same pattern as TimeEntryRow.vue).
+const memberByUserId = computed(() => {
     const map = new Map<string, (typeof members.value)[number]>();
     for (const m of members.value) {
-        map.set(m.id, m);
+        map.set(m.user_id, m);
     }
     return map;
 });
 
-function memberName(memberId: string): string {
-    return memberById.value.get(memberId)?.name ?? 'Unknown member';
+function memberName(userId: string): string {
+    return memberByUserId.value.get(userId)?.name ?? 'Unknown member';
 }
 
-function memberRole(memberId: string): string {
-    return memberById.value.get(memberId)?.role ?? '';
+function memberRole(userId: string): string {
+    return memberByUserId.value.get(userId)?.role ?? '';
 }
 
-function canStop(memberId: string): boolean {
-    if (memberId === getCurrentMembershipId()) {
+function memberIdOf(userId: string): string | undefined {
+    return memberByUserId.value.get(userId)?.id;
+}
+
+function canStop(userId: string): boolean {
+    if (userId === getCurrentUserId()) {
         return false;
     }
-    return canStopTimeEntryFor(memberRole(memberId), memberId);
+    return canStopTimeEntryFor(memberRole(userId), memberIdOf(userId));
 }
 
 function formatStart(start: string): string {
@@ -96,10 +102,10 @@ async function stopEntry(entry: (typeof activeEntries.value)[number]) {
                             :key="entry.id"
                             class="border-t border-default-background-separator">
                             <td class="py-2 pr-4 text-text-primary font-medium">
-                                {{ memberName(entry.member_id) }}
+                                {{ memberName(entry.user_id) }}
                             </td>
                             <td class="py-2 pr-4 text-text-secondary capitalize">
-                                {{ memberRole(entry.member_id) }}
+                                {{ memberRole(entry.user_id) }}
                             </td>
                             <td class="py-2 pr-4 text-text-secondary max-w-64 truncate">
                                 {{ entry.description || '—' }}
@@ -109,7 +115,7 @@ async function stopEntry(entry: (typeof activeEntries.value)[number]) {
                             </td>
                             <td class="py-2 text-right">
                                 <SecondaryButton
-                                    v-if="canStop(entry.member_id)"
+                                    v-if="canStop(entry.user_id)"
                                     size="small"
                                     :loading="stoppingIds.has(entry.id)"
                                     @click="stopEntry(entry)">
