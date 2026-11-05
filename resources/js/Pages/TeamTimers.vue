@@ -5,14 +5,19 @@ import PageTitle from '@/Components/Common/PageTitle.vue';
 import LoadingSpinner from '@/packages/ui/src/LoadingSpinner.vue';
 import { StopIcon } from '@heroicons/vue/20/solid';
 import { ClockIcon } from '@heroicons/vue/20/solid';
-import { computed, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useMembersQuery } from '@/utils/useMembersQuery';
 import { useActiveTeamTimeEntriesQuery } from '@/utils/useActiveTeamTimeEntriesQuery';
 import { useTimeEntriesMutations } from '@/utils/useTimeEntriesMutations';
 import { canStopTimeEntryFor, canViewAllTimeEntries } from '@/utils/permissions';
 import { getCurrentUserId } from '@/utils/useUser';
-import { getDayJsInstance, getLocalizedDayJs } from '@/packages/ui/src/utils/time';
+import {
+    formatDuration,
+    getDayJsInstance,
+    getLocalizedDayJs,
+} from '@/packages/ui/src/utils/time';
 import { SecondaryButton } from '@/packages/ui/src';
+import dayjs from 'dayjs';
 
 const { members } = useMembersQuery();
 const { activeEntries, isPending, invalidateActiveTeamEntries } = useActiveTeamTimeEntriesQuery();
@@ -57,6 +62,28 @@ function formatDate(start: string): string {
     return getLocalizedDayJs(start).format('DD MMM YYYY');
 }
 
+// Live ticking clock so the elapsed column updates every second
+// (same pattern as CurrentSidebarTimer.vue).
+const now = ref(dayjs());
+let timerInterval: ReturnType<typeof setInterval> | null = null;
+
+onMounted(() => {
+    timerInterval = setInterval(() => {
+        now.value = dayjs();
+    }, 1000);
+});
+
+onUnmounted(() => {
+    if (timerInterval !== null) {
+        clearInterval(timerInterval);
+    }
+});
+
+function elapsed(start: string): string {
+    const diff = now.value.diff(dayjs(start), 's');
+    return formatDuration(Math.max(0, diff));
+}
+
 async function stopEntry(entry: (typeof activeEntries.value)[number]) {
     stoppingIds.value.add(entry.id);
     try {
@@ -98,6 +125,7 @@ async function stopEntry(entry: (typeof activeEntries.value)[number]) {
                             <th class="py-2 pr-4 font-medium">Description</th>
                             <th class="py-2 pr-4 font-medium">Date</th>
                             <th class="py-2 pr-4 font-medium">Start</th>
+                            <th class="py-2 pr-4 font-medium">Elapsed</th>
                             <th class="py-2 pr-4 font-medium text-right">Action</th>
                         </tr>
                     </thead>
@@ -120,6 +148,10 @@ async function stopEntry(entry: (typeof activeEntries.value)[number]) {
                             </td>
                             <td class="py-2 pr-4 text-text-secondary">
                                 {{ formatStart(entry.start) }}
+                            </td>
+                            <td
+                                class="py-2 pr-4 text-text-primary font-medium tabular-nums whitespace-nowrap">
+                                {{ elapsed(entry.start) }}
                             </td>
                             <td class="py-2 text-right">
                                 <SecondaryButton
