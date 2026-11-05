@@ -50,7 +50,11 @@ function canStop(userId: string): boolean {
 }
 
 function formatStart(start: string): string {
-    return getLocalizedDayJs(start).format('DD MMM YYYY HH:mm');
+    return getLocalizedDayJs(start).format('HH:mm');
+}
+
+function formatDate(start: string): string {
+    return getLocalizedDayJs(start).format('DD MMM YYYY');
 }
 
 async function stopEntry(entry: (typeof activeEntries.value)[number]) {
@@ -92,6 +96,7 @@ async function stopEntry(entry: (typeof activeEntries.value)[number]) {
                             <th class="py-2 pr-4 font-medium">Member</th>
                             <th class="py-2 pr-4 font-medium">Role</th>
                             <th class="py-2 pr-4 font-medium">Description</th>
+                            <th class="py-2 pr-4 font-medium">Date</th>
                             <th class="py-2 pr-4 font-medium">Start</th>
                             <th class="py-2 pr-4 font-medium text-right">Action</th>
                         </tr>
@@ -109,6 +114,9 @@ async function stopEntry(entry: (typeof activeEntries.value)[number]) {
                             </td>
                             <td class="py-2 pr-4 text-text-secondary max-w-64 truncate">
                                 {{ entry.description || '—' }}
+                            </td>
+                            <td class="py-2 pr-4 text-text-secondary whitespace-nowrap">
+                                {{ formatDate(entry.start) }}
                             </td>
                             <td class="py-2 pr-4 text-text-secondary">
                                 {{ formatStart(entry.start) }}
