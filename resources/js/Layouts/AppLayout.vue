@@ -30,6 +30,7 @@ import { useCurrentTimeEntryStore } from '@/utils/useCurrentTimeEntry';
 import {
     canManageBilling,
     canUpdateOrganization,
+    canViewAllTimeEntries,
     canViewClients,
     canViewGoals,
     canViewInvoices,
@@ -209,6 +210,12 @@ const page = usePage<{
                                 :icon="TableCellsIcon"
                                 :current="route().current('timesheet')"
                                 :href="route('timesheet')"></NavigationSidebarItem>
+                            <NavigationSidebarItem
+                                v-if="canViewAllTimeEntries()"
+                                title="Team Timers"
+                                :icon="ClockIcon"
+                                :current="route().current('team-timers')"
+                                :href="route('team-timers')"></NavigationSidebarItem>
                             <NavigationSidebarItem
                                 title="Reporting"
                                 :icon="ChartBarIcon"

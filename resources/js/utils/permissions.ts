@@ -1,4 +1,5 @@
 import { usePage } from '@inertiajs/vue3';
+import { getCurrentMembershipId, getCurrentRole } from '@/utils/useUser';
 
 const page = usePage<{
     auth: {
@@ -125,6 +126,42 @@ export function canDeleteReport() {
 
 export function canViewAllTimeEntries() {
     return currentUserHasPermission('time-entries:view:all');
+}
+
+export function canUpdateAllTimeEntries() {
+    return currentUserHasPermission('time-entries:update:all');
+}
+
+/**
+ * Whether the current user may stop a running timer of the given member.
+ * Mirrors App\Enums\Role::canStopTimer() on the backend:
+ * - owner: anyone, admin: not owner, manager: manager/employee/placeholder.
+ * Own timer is always allowed (handled via update:own).
+ */
+export function canStopTimeEntryFor(targetRole: string, targetMemberId?: string): boolean {
+    if (targetMemberId && targetMemberId === getCurrentMembershipId()) {
+        return (
+            currentUserHasPermission('time-entries:update:own') ||
+            currentUserHasPermission('time-entries:update:all')
+        );
+    }
+    if (!canUpdateAllTimeEntries()) {
+        return false;
+    }
+    const actorRole = getCurrentRole() as string | undefined;
+    if (!actorRole) {
+        return false;
+    }
+    if (actorRole === 'owner') {
+        return true;
+    }
+    if (actorRole === 'admin') {
+        return targetRole !== 'owner';
+    }
+    if (actorRole === 'manager') {
+        return targetRole === 'manager' || targetRole === 'employee' || targetRole === 'placeholder';
+    }
+    return false;
 }
 export function canViewInvoices() {
     return currentUserHasPermission('invoices:view');

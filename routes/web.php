@@ -50,6 +50,10 @@ Route::middleware([
         return Inertia::render('Timesheet');
     })->name('timesheet');
 
+    Route::get('/team-timers', function () {
+        return Inertia::render('TeamTimers');
+    })->name('team-timers');
+
     Route::get('/reporting', function () {
         return Inertia::render('Reporting');
     })->name('reporting');
