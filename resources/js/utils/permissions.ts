@@ -1,4 +1,5 @@
 import { usePage } from '@inertiajs/vue3';
+import { getCurrentMembershipId, getCurrentRole } from '@/utils/useUser';
 
 const page = usePage<{
     auth: {
@@ -125,6 +126,51 @@ export function canDeleteReport() {
 
 export function canViewAllTimeEntries() {
     return currentUserHasPermission('time-entries:view:all');
+}
+
+export function canUpdateAllTimeEntries() {
+    return currentUserHasPermission('time-entries:update:all');
+}
+
+/**
+ * Role hierarchy for stopping someone else's running timer.
+ * Single source of truth on the frontend; must stay in sync with
+ * App\Enums\Role::canStopTimerOfRole() — both sides fail closed on
+ * unknown roles, and both sides are covered by matrix tests
+ * (tests/Unit/Enums/RoleTest.php and utils/permissions.test.ts).
+ */
+export const STOP_TIMER_ALLOWED_TARGETS: Record<string, string[]> = {
+    owner: ['owner', 'admin', 'manager', 'employee', 'placeholder'],
+    admin: ['admin', 'manager', 'employee', 'placeholder'],
+    manager: ['manager', 'employee', 'placeholder'],
+};
+
+/**
+ * Pure hierarchy check, separated for testability.
+ */
+export function canStopTimeEntryForRole(
+    actorRole: string | null | undefined,
+    targetRole: string,
+    hasUpdateAll: boolean
+): boolean {
+    if (!actorRole || !hasUpdateAll) {
+        return false;
+    }
+    return STOP_TIMER_ALLOWED_TARGETS[actorRole]?.includes(targetRole) ?? false;
+}
+
+/**
+ * Whether the current user may stop a running timer of the given member.
+ * Own timer is always allowed (handled via update:own).
+ */
+export function canStopTimeEntryFor(targetRole: string, targetMemberId?: string): boolean {
+    if (targetMemberId && targetMemberId === getCurrentMembershipId()) {
+        return (
+            currentUserHasPermission('time-entries:update:own') ||
+            currentUserHasPermission('time-entries:update:all')
+        );
+    }
+    return canStopTimeEntryForRole(getCurrentRole(), targetRole, canUpdateAllTimeEntries());
 }
 export function canViewInvoices() {
     return currentUserHasPermission('invoices:view');

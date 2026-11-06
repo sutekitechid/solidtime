@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1;
 
 use App\Enums\ExportFormat;
+use App\Enums\Role;
 use App\Enums\TimeEntryType;
 use App\Exceptions\Api\FeatureIsNotAvailableInFreePlanApiException;
 use App\Exceptions\Api\OverlappingTimeEntryApiException;
@@ -105,6 +106,32 @@ class TimeEntryController extends Controller
         parent::checkPermission($organization, $permission);
         if ($timeEntry !== null && $timeEntry->organization_id !== $organization->getKey()) {
             throw new AuthorizationException('Time entry does not belong to organization');
+        }
+    }
+
+    /**
+     * Enforce role hierarchy when stopping another member's running timer.
+     *
+     * Own timers are always allowed (permission already checked).
+     * Stopping someone else's running timer (end null -> set) requires:
+     * - owner: anyone, admin: not owner, manager: manager/employee/placeholder.
+     */
+    private function assertCanStopOthersTimer(Member $actor, TimeEntry $timeEntry, ?Carbon $effectiveEnd): void
+    {
+        if ($timeEntry->end !== null || $effectiveEnd === null) {
+            return;
+        }
+        if ($timeEntry->member_id === $actor->getKey()) {
+            return;
+        }
+
+        $target = $timeEntry->member;
+        if ($target->organization_id !== $actor->organization_id) {
+            throw new AuthorizationException('Time entry does not belong to organization');
+        }
+
+        if (! Role::canStopTimer($actor->role, $target->role)) {
+            throw new AuthorizationException('You are not allowed to stop this timer.');
         }
     }
 
@@ -697,6 +724,9 @@ class TimeEntryController extends Controller
         $effectiveMember = $request->has('member_id') ? Member::query()->findOrFail($request->input('member_id')) : $timeEntry->member;
         $effectiveStart = $request->has('start') ? Carbon::parse($request->input('start')) : $timeEntry->start;
         $effectiveEnd = $request->has('end') ? ($request->input('end') !== null ? Carbon::parse($request->input('end')) : null) : $timeEntry->end;
+
+        $this->assertCanStopOthersTimer($member, $timeEntry, $effectiveEnd);
+
         $this->assertNoOverlap($organization, $effectiveMember, $effectiveStart, $effectiveEnd, $timeEntry);
 
         // The new member could already have a running time entry

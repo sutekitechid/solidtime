@@ -43,6 +43,17 @@ class TimeEntryUpdateMultipleRequest extends BaseFormRequest
                 'required',
                 'array',
             ],
+            // Timer state (start/end) can never be changed in bulk: stopping a
+            // running timer goes through PUT /time-entries/{timeEntry}, where the
+            // role hierarchy for stopping other members' timers is enforced.
+            // Without these rules the keys would silently pass validation and be
+            // written by Model::fill() under Model::unguard().
+            'changes.start' => [
+                'prohibited',
+            ],
+            'changes.end' => [
+                'prohibited',
+            ],
             // ID of the organization member that the time entry should belong to
             'changes.member_id' => [
                 'string',

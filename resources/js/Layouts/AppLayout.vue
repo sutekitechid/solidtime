@@ -9,15 +9,16 @@ import {
     ClockIcon,
     Cog6ToothIcon,
     CreditCardIcon,
+    DocumentTextIcon,
     FolderIcon,
     HomeIcon,
     MagnifyingGlassIcon,
+    TableCellsIcon,
     TagIcon,
     UserCircleIcon,
     UserGroupIcon,
+    UsersIcon,
     XMarkIcon,
-    DocumentTextIcon,
-    TableCellsIcon,
 } from '@heroicons/vue/20/solid';
 import { PanelLeft, Target } from '@lucide/vue';
 import NavigationSidebarItem from '@/Components/NavigationSidebarItem.vue';
@@ -30,6 +31,7 @@ import { useCurrentTimeEntryStore } from '@/utils/useCurrentTimeEntry';
 import {
     canManageBilling,
     canUpdateOrganization,
+    canViewAllTimeEntries,
     canViewClients,
     canViewGoals,
     canViewInvoices,
@@ -209,6 +211,12 @@ const page = usePage<{
                                 :icon="TableCellsIcon"
                                 :current="route().current('timesheet')"
                                 :href="route('timesheet')"></NavigationSidebarItem>
+                            <NavigationSidebarItem
+                                v-if="canViewAllTimeEntries()"
+                                title="Team Timers"
+                                :icon="UsersIcon"
+                                :current="route().current('team-timers')"
+                                :href="route('team-timers')"></NavigationSidebarItem>
                             <NavigationSidebarItem
                                 title="Reporting"
                                 :icon="ChartBarIcon"
