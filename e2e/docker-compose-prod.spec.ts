@@ -8,12 +8,14 @@ import { join } from 'node:path';
  *  harusnya ngambil dari .env.prod".
  *
  * Akar masalah sebelumnya: service app/scheduler/worker punya
- * `environment: DB_*` yang MENIMPA `env_file: .env.prod`, dan interpolasi
- * `${DB_*:-solidtime}` hanya baca shell/--env-file (bukan env_file:),
- * sehingga update tanpa flag --env-file diam-diam revert ke `solidtime`.
+ * `environment: DB_*` dengan default `${DB_*:-solidtime}` yang MENIMPA
+ * `env_file: .env.prod`, dan interpolasi hanya baca shell/--env-file
+ * (bukan env_file:), sehingga update tanpa flag --env-file diam-diam
+ * revert ke `solidtime`.
  *
- * Test ini statis (tidak butuh docker/page): memastikan
- * docker-compose.prod.yml menjadikan .env.prod sebagai single source of truth.
+ * Format yang dipakai sekarang (standar DevOps): kredensial dicerminkan
+ * eksplisit tanpa default (`DB_DATABASE: ${DB_DATABASE}`, dst.) dan
+ * service pgsql fail-fast (`${VAR:?...}`). Test ini mengunci format itu.
  */
 
 const COMPOSE_PATH = join(process.cwd(), 'docker-compose.prod.yml');
@@ -35,7 +37,7 @@ function serviceBlock(compose: string, name: string): string {
 }
 
 for (const service of ['app', 'scheduler', 'worker']) {
-    test(`${service}: kredensial DB tidak di-override, murni dari .env.prod`, () => {
+    test(`${service}: kredensial DB dicerminkan eksplisit dari .env.prod`, () => {
         const compose = readFileSync(COMPOSE_PATH, 'utf-8');
         const block = serviceBlock(compose, service);
 
@@ -43,17 +45,21 @@ for (const service of ['app', 'scheduler', 'worker']) {
         expect(block).toContain('.env.prod');
         expect(block).toMatch(/required:\s*true/);
 
-        // Dilarang menimpa kredensial DB di environment: (override > env_file).
-        // Kalau baris ini muncul lagi, bug "balik ke default" akan kembali.
-        for (const key of [
-            'DB_DATABASE:',
-            'DB_USERNAME:',
-            'DB_PASSWORD:',
-            'DB_HOST:',
-            'DB_CONNECTION:',
-            'DB_PORT:',
-            'GOTENBERG_URL:',
-        ]) {
+        // Format standar DevOps: cerminkan kredensial tanpa default samaran.
+        // Tanpa `:-default` agar tidak bisa diam-diam revert ke `solidtime`.
+        for (const [key, pattern] of [
+            ['DB_DATABASE', /DB_DATABASE:\s*\$\{DB_DATABASE\}/],
+            ['DB_USERNAME', /DB_USERNAME:\s*\$\{DB_USERNAME\}/],
+            ['DB_PASSWORD', /DB_PASSWORD:\s*\$\{DB_PASSWORD\}/],
+        ] as const) {
+            expect(block, `${service} wajib mencerminkan ${key} dari --env-file`).toMatch(pattern);
+        }
+        expect(block).not.toContain('${DB_DATABASE:-');
+        expect(block).not.toContain('${DB_USERNAME:-');
+
+        // Selain kredensial, koneksi tetap dibaca dari .env.prod via env_file
+        // (tidak di-override di sini).
+        for (const key of ['DB_HOST:', 'DB_CONNECTION:', 'DB_PORT:', 'GOTENBERG_URL:']) {
             expect(
                 block.split('\n').some((line) => line.trimStart().startsWith(key)),
                 `${service} tidak boleh menimpa ${key} (baca dari .env.prod via env_file)`

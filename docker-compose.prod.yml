@@ -1,8 +1,9 @@
 # Production compose untuk solidtime.
 #
-# SINGLE SOURCE OF TRUTH = .env.prod (dibaca container via `env_file:`).
-# Blok `environment:` di bawah SENGAJA tidak menimpa DB_* agar update tidak
-# "balik lagi" ke default. Jangan tambahkan DB_*/POSTGRES_* hardcode di sini.
+# SINGLE SOURCE OF TRUTH = .env.prod: dibaca container via `env_file:`,
+# dan dicerminkan ke `environment:` via interpolasi ${...} yang diisi dari
+# flag --env-file (format sesuai standar DevOps). Tanpa flag --env-file,
+# service pgsql gagal fail-fast (tidak revert diam-diam ke default).
 #
 # Database dibuat otomatis oleh image postgres dari POSTGRES_* di bawah
 # (tidak perlu CREATE DATABASE manual). Aplikasi konek via hostname service
@@ -48,10 +49,13 @@ services:
       CONTAINER_MODE: http
       OCTANE_SERVER: frankenphp
       AUTO_DB_MIGRATE: ${AUTO_DB_MIGRATE:-true}
-      # DB_CONNECTION/DB_HOST/DB_PORT/DB_DATABASE/DB_USERNAME/DB_PASSWORD +
-      # GOTENBERG_URL sengaja TIDAK di-override di sini: dibaca Laravel
-      # langsung dari .env.prod via env_file di atas. Menimpa di sini bikin
-      # update "balik lagi" ke default saat --env-file lupa disertakan.
+      # Kredensial DB dicerminkan dari --env-file (format sesuai standar DevOps).
+      # WAJIB deploy dengan: docker compose --env-file .env.prod -f ... up -d
+      DB_DATABASE: ${DB_DATABASE}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      # DB_CONNECTION/DB_HOST/DB_PORT/GOTENBERG_URL dibaca dari .env.prod
+      # via env_file (tidak di-override di sini).
     depends_on:
       pgsql:
         condition: service_healthy
@@ -78,7 +82,10 @@ services:
       CONTAINER_MODE: scheduler
       OCTANE_SERVER: frankenphp
       AUTO_DB_MIGRATE: ${AUTO_DB_MIGRATE:-true}
-      # DB_* dibaca dari .env.prod via env_file (lihat catatan di service app).
+      DB_DATABASE: ${DB_DATABASE}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      # DB_CONNECTION/DB_HOST/DB_PORT dibaca dari .env.prod via env_file.
     depends_on:
       pgsql:
         condition: service_healthy
@@ -98,7 +105,10 @@ services:
       OCTANE_SERVER: frankenphp
       AUTO_DB_MIGRATE: ${AUTO_DB_MIGRATE:-true}
       WORKER_COMMAND: ${WORKER_COMMAND:-php /var/www/html/artisan queue:work database --sleep=3 --tries=3}
-      # DB_* dibaca dari .env.prod via env_file (lihat catatan di service app).
+      DB_DATABASE: ${DB_DATABASE}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      # DB_CONNECTION/DB_HOST/DB_PORT dibaca dari .env.prod via env_file.
     depends_on:
       pgsql:
         condition: service_healthy
