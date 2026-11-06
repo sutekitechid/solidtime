@@ -9,15 +9,16 @@ import {
     ClockIcon,
     Cog6ToothIcon,
     CreditCardIcon,
+    DocumentTextIcon,
     FolderIcon,
     HomeIcon,
     MagnifyingGlassIcon,
+    TableCellsIcon,
     TagIcon,
     UserCircleIcon,
     UserGroupIcon,
+    UsersIcon,
     XMarkIcon,
-    DocumentTextIcon,
-    TableCellsIcon,
 } from '@heroicons/vue/20/solid';
 import { PanelLeft, Target } from '@lucide/vue';
 import NavigationSidebarItem from '@/Components/NavigationSidebarItem.vue';
@@ -213,7 +214,7 @@ const page = usePage<{
                             <NavigationSidebarItem
                                 v-if="canViewAllTimeEntries()"
                                 title="Team Timers"
-                                :icon="ClockIcon"
+                                :icon="UsersIcon"
                                 :current="route().current('team-timers')"
                                 :href="route('team-timers')"></NavigationSidebarItem>
                             <NavigationSidebarItem

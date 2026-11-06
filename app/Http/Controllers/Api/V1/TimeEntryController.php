@@ -126,7 +126,7 @@ class TimeEntryController extends Controller
         }
 
         $target = $timeEntry->member;
-        if ($target === null || $target->organization_id !== $actor->organization_id) {
+        if ($target->organization_id !== $actor->organization_id) {
             throw new AuthorizationException('Time entry does not belong to organization');
         }
 
@@ -715,6 +715,10 @@ class TimeEntryController extends Controller
             $this->checkPermission($organization, 'time-entries:update:all', $timeEntry);
         }
 
+        if ($timeEntry->end !== null && $request->has('end') && $request->input('end') === null) {
+            throw new TimeEntryCanNotBeRestartedApiException;
+        }
+
         // Overlap check for update (exclude current)
         /** @var Member $effectiveMember */
         $effectiveMember = $request->has('member_id') ? Member::query()->findOrFail($request->input('member_id')) : $timeEntry->member;
@@ -722,10 +726,6 @@ class TimeEntryController extends Controller
         $effectiveEnd = $request->has('end') ? ($request->input('end') !== null ? Carbon::parse($request->input('end')) : null) : $timeEntry->end;
 
         $this->assertCanStopOthersTimer($member, $timeEntry, $effectiveEnd);
-
-        if ($timeEntry->end !== null && $request->has('end') && $request->input('end') === null) {
-            throw new TimeEntryCanNotBeRestartedApiException;
-        }
 
         $this->assertNoOverlap($organization, $effectiveMember, $effectiveStart, $effectiveEnd, $timeEntry);
 

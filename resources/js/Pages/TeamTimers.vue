@@ -3,55 +3,51 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import MainContainer from '@/packages/ui/src/MainContainer.vue';
 import PageTitle from '@/Components/Common/PageTitle.vue';
 import LoadingSpinner from '@/packages/ui/src/LoadingSpinner.vue';
-import { StopIcon } from '@heroicons/vue/20/solid';
 import { ClockIcon } from '@heroicons/vue/20/solid';
+import { StopIcon } from '@heroicons/vue/20/solid';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useMembersQuery } from '@/utils/useMembersQuery';
 import { useActiveTeamTimeEntriesQuery } from '@/utils/useActiveTeamTimeEntriesQuery';
 import { useTimeEntriesMutations } from '@/utils/useTimeEntriesMutations';
+import { useOrganizationQuery } from '@/utils/useOrganizationQuery';
 import { canStopTimeEntryFor, canViewAllTimeEntries } from '@/utils/permissions';
-import { getCurrentUserId } from '@/utils/useUser';
+import { getCurrentOrganizationId } from '@/utils/useUser';
 import {
-    formatDuration,
+    formatHumanReadableDuration,
     getDayJsInstance,
     getLocalizedDayJs,
 } from '@/packages/ui/src/utils/time';
 import { SecondaryButton } from '@/packages/ui/src';
+import type { Member } from '@/packages/api/src';
 import dayjs from 'dayjs';
 
 const { members } = useMembersQuery();
-const { activeEntries, isPending, invalidateActiveTeamEntries } = useActiveTeamTimeEntriesQuery();
+const { activeEntries, isLoading } = useActiveTeamTimeEntriesQuery();
 const { updateTimeEntry } = useTimeEntriesMutations();
+const { organization } = useOrganizationQuery(getCurrentOrganizationId()!);
 
 const stoppingIds = ref<Set<string>>(new Set());
 
 // TimeEntryResource has no member_id, only user_id — resolve members by user_id
 // (same pattern as TimeEntryRow.vue).
 const memberByUserId = computed(() => {
-    const map = new Map<string, (typeof members.value)[number]>();
-    for (const m of members.value) {
-        map.set(m.user_id, m);
+    const map = new Map<string, Member>();
+    for (const member of members.value) {
+        map.set(member.user_id, member);
     }
     return map;
 });
 
-function memberName(userId: string): string {
-    return memberByUserId.value.get(userId)?.name ?? 'Unknown member';
-}
-
-function memberRole(userId: string): string {
-    return memberByUserId.value.get(userId)?.role ?? '';
-}
-
-function memberIdOf(userId: string): string | undefined {
-    return memberByUserId.value.get(userId)?.id;
+function memberFor(userId: string): Member | undefined {
+    return memberByUserId.value.get(userId);
 }
 
 function canStop(userId: string): boolean {
-    if (userId === getCurrentUserId()) {
+    const member = memberFor(userId);
+    if (!member) {
         return false;
     }
-    return canStopTimeEntryFor(memberRole(userId), memberIdOf(userId));
+    return canStopTimeEntryFor(member.role, member.id);
 }
 
 function formatStart(start: string): string {
@@ -81,17 +77,22 @@ onUnmounted(() => {
 
 function elapsed(start: string): string {
     const diff = now.value.diff(dayjs(start), 's');
-    return formatDuration(Math.max(0, diff));
+    return formatHumanReadableDuration(
+        Math.max(0, diff),
+        organization.value?.interval_format ?? 'hours-minutes',
+        organization.value?.number_format ?? 'point'
+    );
 }
 
 async function stopEntry(entry: (typeof activeEntries.value)[number]) {
     stoppingIds.value.add(entry.id);
     try {
+        // useTimeEntriesMutations already invalidates ['timeEntries'], which
+        // covers the active-team query below it.
         await updateTimeEntry({
             ...entry,
             end: getDayJsInstance().utc().format(),
         });
-        await invalidateActiveTeamEntries();
     } finally {
         stoppingIds.value.delete(entry.id);
     }
@@ -108,7 +109,7 @@ async function stopEntry(entry: (typeof activeEntries.value)[number]) {
             <div v-if="!canViewAllTimeEntries()" class="text-sm text-text-secondary">
                 You do not have permission to view team timers.
             </div>
-            <div v-else-if="isPending" class="flex justify-center items-center py-12">
+            <div v-else-if="isLoading" class="flex justify-center items-center py-12">
                 <LoadingSpinner />
             </div>
             <div v-else-if="activeEntries.length === 0" class="text-center pt-12">
@@ -135,10 +136,10 @@ async function stopEntry(entry: (typeof activeEntries.value)[number]) {
                             :key="entry.id"
                             class="border-t border-default-background-separator">
                             <td class="py-2 pr-4 text-text-primary font-medium">
-                                {{ memberName(entry.user_id) }}
+                                {{ memberFor(entry.user_id)?.name ?? 'Unknown member' }}
                             </td>
                             <td class="py-2 pr-4 text-text-secondary capitalize">
-                                {{ memberRole(entry.user_id) }}
+                                {{ memberFor(entry.user_id)?.role ?? '' }}
                             </td>
                             <td class="py-2 pr-4 text-text-secondary max-w-64 truncate">
                                 {{ entry.description || '—' }}

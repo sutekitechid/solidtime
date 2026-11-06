@@ -25,13 +25,14 @@ enum Role: string
      * - admin: may stop admin, manager, employee, placeholder (not owner)
      * - manager: may stop manager, employee, placeholder (not admin/owner)
      * - employee/placeholder: may not stop anyone else (only own timer)
+     *
+     * Unknown or null target roles fail closed.
      */
-    public function canStopTimerOfRole(string $targetRole): bool
+    public function canStopTimerOfRole(?string $targetRole): bool
     {
-        $target = self::tryFrom($targetRole);
+        $target = $targetRole !== null ? self::tryFrom($targetRole) : null;
         if ($target === null) {
-            // Unknown/custom roles: fall back to permission check only.
-            return true;
+            return false;
         }
 
         return match ($this) {
@@ -42,12 +43,18 @@ enum Role: string
         };
     }
 
-    public static function canStopTimer(string $actorRole, string $targetRole): bool
+    /**
+     * Whether the actor role may stop the target role's running timer.
+     *
+     * Unknown or null roles on either side fail closed. Callers must have
+     * already checked the relevant time-entries:update permission; this only
+     * enforces the additional role hierarchy for stopping someone else's timer.
+     */
+    public static function canStopTimer(?string $actorRole, ?string $targetRole): bool
     {
-        $actor = self::tryFrom($actorRole);
+        $actor = $actorRole !== null ? self::tryFrom($actorRole) : null;
         if ($actor === null) {
-            // Custom roles: rely on time-entries:update:all permission only.
-            return true;
+            return false;
         }
 
         return $actor->canStopTimerOfRole($targetRole);
