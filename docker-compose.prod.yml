@@ -1,4 +1,9 @@
 # Production compose untuk solidtime.
+#
+# SINGLE SOURCE OF TRUTH = .env.prod (dibaca container via `env_file:`).
+# Blok `environment:` di bawah SENGAJA tidak menimpa DB_* agar update tidak
+# "balik lagi" ke default. Jangan tambahkan DB_*/POSTGRES_* hardcode di sini.
+#
 # Database dibuat otomatis oleh image postgres dari POSTGRES_* di bawah
 # (tidak perlu CREATE DATABASE manual). Aplikasi konek via hostname service
 # `pgsql`, BUKAN 127.0.0.1. Migrasi jalan otomatis saat boot via
@@ -9,10 +14,17 @@
 #   2. composer install --no-dev --optimize-autoloader && npm ci && npm run build
 #      (wajib SEBELUM build image: Dockerfile hanya dump-autoload,
 #      vendor/ + public/build ikut dari build context)
-#   3. docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
-#   4. Satu kali saja: docker compose -f docker-compose.prod.yml exec app \
+#   3. docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
+#      (flag --env-file WAJIB: untuk interpolasi ${SOLIDTIME_IMAGE_TAG},
+#      ${FORWARD_APP_PORT}, POSTGRES_* di service pgsql)
+#   4. Satu kali saja: docker compose --env-file .env.prod -f docker-compose.prod.yml exec app \
 #        php artisan passport:client --personal --name=API
 #      lalu masukkan id/secret ke .env.prod dan recreate app.
+#
+# Catatan password:
+# - POSTGRES_* hanya dipakai saat volume pgdata PERTAMA kali dibuat.
+#   Ganti password setelah itu HARUS manual: ALTER USER ... WITH PASSWORD ...,
+#   baru samakan .env.prod + recreate app. Jangan cuma edit .env.prod.
 
 name: solidtime-prod
 
@@ -30,19 +42,16 @@ services:
     ports:
       - "${FORWARD_APP_PORT:-8000}:8000"
     env_file:
-      - .env.prod
+      - path: .env.prod
+        required: true
     environment:
       CONTAINER_MODE: http
       OCTANE_SERVER: frankenphp
       AUTO_DB_MIGRATE: ${AUTO_DB_MIGRATE:-true}
-      # Host DB = nama service compose, jangan 127.0.0.1
-      DB_CONNECTION: pgsql
-      DB_HOST: pgsql
-      DB_PORT: 5432
-      DB_DATABASE: ${DB_DATABASE:-solidtime}
-      DB_USERNAME: ${DB_USERNAME:-solidtime}
-      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD wajib diisi}
-      GOTENBERG_URL: http://gotenberg:3000
+      # DB_CONNECTION/DB_HOST/DB_PORT/DB_DATABASE/DB_USERNAME/DB_PASSWORD +
+      # GOTENBERG_URL sengaja TIDAK di-override di sini: dibaca Laravel
+      # langsung dari .env.prod via env_file di atas. Menimpa di sini bikin
+      # update "balik lagi" ke default saat --env-file lupa disertakan.
     depends_on:
       pgsql:
         condition: service_healthy
@@ -63,17 +72,13 @@ services:
     image: solidtime:${SOLIDTIME_IMAGE_TAG:-latest}
     restart: unless-stopped
     env_file:
-      - .env.prod
+      - path: .env.prod
+        required: true
     environment:
       CONTAINER_MODE: scheduler
       OCTANE_SERVER: frankenphp
       AUTO_DB_MIGRATE: ${AUTO_DB_MIGRATE:-true}
-      DB_CONNECTION: pgsql
-      DB_HOST: pgsql
-      DB_PORT: 5432
-      DB_DATABASE: ${DB_DATABASE:-solidtime}
-      DB_USERNAME: ${DB_USERNAME:-solidtime}
-      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD wajib diisi}
+      # DB_* dibaca dari .env.prod via env_file (lihat catatan di service app).
     depends_on:
       pgsql:
         condition: service_healthy
@@ -86,18 +91,14 @@ services:
     image: solidtime:${SOLIDTIME_IMAGE_TAG:-latest}
     restart: unless-stopped
     env_file:
-      - .env.prod
+      - path: .env.prod
+        required: true
     environment:
       CONTAINER_MODE: worker
       OCTANE_SERVER: frankenphp
       AUTO_DB_MIGRATE: ${AUTO_DB_MIGRATE:-true}
       WORKER_COMMAND: ${WORKER_COMMAND:-php /var/www/html/artisan queue:work database --sleep=3 --tries=3}
-      DB_CONNECTION: pgsql
-      DB_HOST: pgsql
-      DB_PORT: 5432
-      DB_DATABASE: ${DB_DATABASE:-solidtime}
-      DB_USERNAME: ${DB_USERNAME:-solidtime}
-      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD wajib diisi}
+      # DB_* dibaca dari .env.prod via env_file (lihat catatan di service app).
     depends_on:
       pgsql:
         condition: service_healthy
@@ -109,16 +110,23 @@ services:
   pgsql:
     image: postgres:15
     restart: unless-stopped
+    env_file:
+      - path: .env.prod
+        required: true
     environment:
-      POSTGRES_DB: ${DB_DATABASE:-solidtime}
-      POSTGRES_USER: ${DB_USERNAME:-solidtime}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD wajib diisi}
+      # Fail-fast tanpa default (:-) agar salah config langsung error,
+      # bukan diam-diam revert ke `solidtime`. Nilai diambil dari --env-file.
+      POSTGRES_DB: ${DB_DATABASE:?DB_DATABASE wajib diisi di .env.prod}
+      POSTGRES_USER: ${DB_USERNAME:?DB_USERNAME wajib diisi di .env.prod}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD wajib diisi di .env.prod}
     volumes:
       - pgdata:/var/lib/postgresql/data
     networks:
       - solidtime
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-solidtime} -d ${DB_DATABASE:-solidtime}"]
+      # Pakai runtime env POSTGRES_* (escape $$), bukan interpolasi compose,
+      # agar healthcheck selalu konsisten dengan password/DB aktual container.
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 5
